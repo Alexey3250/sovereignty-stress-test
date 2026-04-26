@@ -22,30 +22,64 @@ const MODELS = [
   { id: "qwen-3-235b-a22b-instruct-2507", label: "Qwen 3 · 235B" },
 ] as const;
 
+const EXAMPLE_QUESTIONS = [
+  {
+    label: "Emirates ID renewal",
+    text: "What documents do I need to renew my Emirates ID?",
+  },
+  {
+    label: "Federal working hours",
+    text: "What are the official working hours for UAE federal government employees?",
+  },
+  {
+    label: "Visa overstay penalty",
+    text: "What is the penalty for overstaying a UAE residence visa?",
+  },
+  {
+    label: "بدل السكن",
+    text: "ما هو بدل السكن للموظفين الاتحاديين في الإمارات؟",
+  },
+  {
+    label: "تجديد الإقامة",
+    text: "ما هي خطوات تجديد تأشيرة الإقامة في الإمارات؟",
+  },
+  {
+    label: "How many R in strawberry",
+    text: "How many R letters are in the word strawberry?",
+  },
+];
+
 type ModelId = (typeof MODELS)[number]["id"];
 
 const ARABIC_RE = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/;
 
-const EN_MARKER = "ENGLISH:";
-const AR_MARKER = "ARABIC:";
+const EN_MARKER_RE = /ENGL[I\u064A]SH\s*:/i;
+const AR_MARKER_RE = /ARAB[I\u064A]C\s*:/i;
 
 type Phase = "preface" | "english" | "arabic";
 
 type Bilingual = { english: string; arabic: string; phase: Phase };
 
 function parseBilingual(text: string): Bilingual {
-  const enIdx = text.indexOf(EN_MARKER);
-  const arIdx = text.indexOf(AR_MARKER);
+  const enMatch = EN_MARKER_RE.exec(text);
+  const arMatch = AR_MARKER_RE.exec(text);
 
-  if (enIdx === -1) {
+  if (!enMatch) {
     return { english: text, arabic: "", phase: "preface" };
   }
-  if (arIdx === -1 || arIdx < enIdx) {
-    const english = text.slice(enIdx + EN_MARKER.length).replace(/^\s+/, "");
+
+  const enIdx = enMatch.index;
+  const enEnd = enIdx + enMatch[0].length;
+
+  if (!arMatch || arMatch.index < enIdx) {
+    const english = text.slice(enEnd).replace(/^\s+/, "");
     return { english, arabic: "", phase: "english" };
   }
-  const english = text.slice(enIdx + EN_MARKER.length, arIdx).trim();
-  const arabic = text.slice(arIdx + AR_MARKER.length).replace(/^\s+/, "");
+
+  const arIdx = arMatch.index;
+  const arEnd = arIdx + arMatch[0].length;
+  const english = text.slice(enEnd, arIdx).trim();
+  const arabic = text.slice(arEnd).replace(/^\s+/, "");
   return { english, arabic, phase: "arabic" };
 }
 
@@ -72,6 +106,17 @@ export default function Home() {
   const [question, setQuestion] = useState("");
   const [cards, setCards] = useState<Record<ModelId, CardState>>(initialState);
   const abortRef = useRef<AbortController | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+
+  function pickExample(text: string) {
+    setQuestion(text);
+    const el = textareaRef.current;
+    if (el) {
+      el.focus();
+      const len = text.length;
+      el.setSelectionRange(len, len);
+    }
+  }
 
   const isRtl = useMemo(() => ARABIC_RE.test(question), [question]);
   const anyStreaming = useMemo(
@@ -199,6 +244,7 @@ export default function Home() {
 
       <section className="flex flex-col gap-3">
         <textarea
+          ref={textareaRef}
           value={question}
           onChange={(e) => setQuestion(e.target.value)}
           onKeyDown={onKeyDown}
@@ -207,6 +253,22 @@ export default function Home() {
           rows={3}
           className="w-full resize-y rounded-lg border border-neutral-800 bg-neutral-900 px-4 py-3 text-base text-neutral-100 placeholder:text-neutral-500 focus:border-neutral-600 focus:outline-none"
         />
+        <div className="flex flex-col gap-2">
+          <span className="text-xs text-neutral-500">Try:</span>
+          <div className="flex flex-wrap gap-2">
+            {EXAMPLE_QUESTIONS.map((q) => (
+              <button
+                key={q.text}
+                type="button"
+                onClick={() => pickExample(q.text)}
+                dir={ARABIC_RE.test(q.label) ? "rtl" : "ltr"}
+                className="rounded-full border border-neutral-800 bg-neutral-900 px-3 py-1.5 text-xs text-neutral-300 transition hover:border-neutral-600 hover:bg-neutral-800 hover:text-neutral-100"
+              >
+                {q.label}
+              </button>
+            ))}
+          </div>
+        </div>
         <div className="flex items-center justify-between gap-3">
           <span className="text-xs text-neutral-500">
             {isRtl ? "RTL" : "LTR"} · Cmd/Ctrl+Enter to run
