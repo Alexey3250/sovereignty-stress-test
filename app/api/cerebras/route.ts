@@ -1,10 +1,8 @@
 import type { NextRequest } from "next/server";
 
 const ALLOWED_MODELS = [
-  "qwen-3-235b-a22b-instruct-2507",
-  "gpt-oss-120b",
-  "zai-glm-4.7",
   "llama3.1-8b",
+  "qwen-3-235b-a22b-instruct-2507",
 ] as const;
 
 type AllowedModel = (typeof ALLOWED_MODELS)[number];

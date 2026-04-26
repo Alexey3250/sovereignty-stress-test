@@ -18,10 +18,8 @@ type CardState = {
 };
 
 const MODELS = [
-  { id: "qwen-3-235b-a22b-instruct-2507", label: "Qwen 3 · 235B" },
-  { id: "gpt-oss-120b", label: "GPT-OSS · 120B" },
-  { id: "zai-glm-4.7", label: "GLM 4.7 · ZAI" },
   { id: "llama3.1-8b", label: "Llama 3.1 · 8B" },
+  { id: "qwen-3-235b-a22b-instruct-2507", label: "Qwen 3 · 235B" },
 ] as const;
 
 type ModelId = (typeof MODELS)[number]["id"];
@@ -200,7 +198,7 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+      <section className="grid grid-cols-1 gap-4 md:grid-cols-2">
         {MODELS.map((m) => (
           <Card key={m.id} title={m.label} state={cards[m.id]} isRtl={isRtl} />
         ))}
