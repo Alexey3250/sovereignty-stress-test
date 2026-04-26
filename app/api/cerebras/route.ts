@@ -8,8 +8,15 @@ const ALLOWED_MODELS = [
 type AllowedModel = (typeof ALLOWED_MODELS)[number];
 
 const CEREBRAS_URL = "https://api.cerebras.ai/v1/chat/completions";
-const SYSTEM_PROMPT =
-  "You are a helpful assistant answering questions about UAE government services. Respond in the same language as the user's question. Be concise.";
+const SYSTEM_PROMPT = `You are a helpful assistant for UAE government services. Always respond in BOTH languages: first in English, then in Arabic. Use this exact format with clear separators:
+
+ENGLISH:
+[your answer in English]
+
+ARABIC:
+[your answer in Arabic]
+
+Be concise. Both versions should convey the same information.`;
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

@@ -26,6 +26,29 @@ type ModelId = (typeof MODELS)[number]["id"];
 
 const ARABIC_RE = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/;
 
+const EN_MARKER = "ENGLISH:";
+const AR_MARKER = "ARABIC:";
+
+type Phase = "preface" | "english" | "arabic";
+
+type Bilingual = { english: string; arabic: string; phase: Phase };
+
+function parseBilingual(text: string): Bilingual {
+  const enIdx = text.indexOf(EN_MARKER);
+  const arIdx = text.indexOf(AR_MARKER);
+
+  if (enIdx === -1) {
+    return { english: text, arabic: "", phase: "preface" };
+  }
+  if (arIdx === -1 || arIdx < enIdx) {
+    const english = text.slice(enIdx + EN_MARKER.length).replace(/^\s+/, "");
+    return { english, arabic: "", phase: "english" };
+  }
+  const english = text.slice(enIdx + EN_MARKER.length, arIdx).trim();
+  const arabic = text.slice(arIdx + AR_MARKER.length).replace(/^\s+/, "");
+  return { english, arabic, phase: "arabic" };
+}
+
 function emptyCard(): CardState {
   return {
     status: "idle",
@@ -200,23 +223,18 @@ export default function Home() {
 
       <section className="grid grid-cols-1 gap-4 md:grid-cols-2">
         {MODELS.map((m) => (
-          <Card key={m.id} title={m.label} state={cards[m.id]} isRtl={isRtl} />
+          <Card key={m.id} title={m.label} state={cards[m.id]} />
         ))}
       </section>
     </main>
   );
 }
 
-function Card({
-  title,
-  state,
-  isRtl,
-}: {
-  title: string;
-  state: CardState;
-  isRtl: boolean;
-}) {
+function Card({ title, state }: { title: string; state: CardState }) {
   const { status, text, error, metrics } = state;
+  const { english, arabic, phase } = useMemo(() => parseBilingual(text), [text]);
+  const streaming = status === "streaming";
+
   return (
     <div className="flex flex-col rounded-xl border border-neutral-800 bg-neutral-900">
       <div className="flex items-center justify-between border-b border-neutral-800 px-5 py-3">
@@ -224,30 +242,88 @@ function Card({
         <StatusBadge status={status} />
       </div>
 
-      <div
-        dir={isRtl ? "rtl" : "ltr"}
-        className="min-h-[180px] flex-1 whitespace-pre-wrap wrap-break-word px-5 py-4 text-[15px] leading-relaxed text-neutral-100"
-      >
-        {error ? (
-          <span className="text-red-400">Error: {error}</span>
-        ) : text ? (
-          <>
-            {text}
-            {status === "streaming" && (
-              <span className="ml-0.5 inline-block h-4 w-2 animate-pulse bg-neutral-400 align-middle" />
-            )}
-          </>
-        ) : (
-          <span className="text-neutral-500">
-            {status === "streaming" ? "Waiting for first token..." : "Idle."}
-          </span>
-        )}
-      </div>
+      {error ? (
+        <div className="min-h-[180px] flex-1 px-5 py-4 text-[15px] leading-relaxed text-red-400">
+          Error: {error}
+        </div>
+      ) : !text ? (
+        <div className="min-h-[180px] flex-1 px-5 py-4 text-[15px] leading-relaxed text-neutral-500">
+          {streaming ? "Waiting for first token..." : "Idle."}
+        </div>
+      ) : (
+        <div className="grid flex-1 grid-cols-1 divide-y divide-neutral-800 md:grid-cols-2 md:divide-x md:divide-y-0">
+          <Pane
+            label="EN"
+            dir="ltr"
+            content={english}
+            placeholder={streaming ? "Waiting for ENGLISH marker..." : ""}
+            showCursor={streaming && (phase === "preface" || phase === "english")}
+          />
+          <Pane
+            label="ع"
+            dir="rtl"
+            content={arabic}
+            placeholder={streaming ? "..." : ""}
+            showCursor={streaming && phase === "arabic"}
+          />
+        </div>
+      )}
 
       <div className="flex flex-wrap gap-x-6 gap-y-1 border-t border-neutral-800 px-5 py-2 font-mono text-xs text-neutral-400">
         <Metric label="TTFT" value={metrics.ttft != null ? `${metrics.ttft} ms` : "—"} />
         <Metric label="Total" value={metrics.totalMs != null ? `${metrics.totalMs} ms` : "—"} />
         <Metric label="Tokens" value={metrics.tokens != null ? String(metrics.tokens) : "—"} />
+      </div>
+    </div>
+  );
+}
+
+function Pane({
+  label,
+  dir,
+  content,
+  placeholder,
+  showCursor,
+}: {
+  label: string;
+  dir: "ltr" | "rtl";
+  content: string;
+  placeholder: string;
+  showCursor: boolean;
+}) {
+  const hasContent = content.length > 0;
+  return (
+    <div className="flex min-h-[180px] flex-col gap-2 bg-neutral-950/30 px-5 py-4">
+      <div
+        dir="ltr"
+        className={`flex items-center gap-2 font-mono text-[10px] uppercase tracking-wider text-neutral-500 ${
+          dir === "rtl" ? "justify-end" : "justify-start"
+        }`}
+      >
+        <span className="rounded border border-neutral-800 bg-neutral-900 px-1.5 py-0.5 text-neutral-300">
+          {label}
+        </span>
+      </div>
+      <div
+        dir={dir}
+        lang={dir === "rtl" ? "ar" : "en"}
+        className="flex-1 whitespace-pre-wrap wrap-break-word text-[15px] leading-relaxed text-neutral-100"
+      >
+        {hasContent ? (
+          <>
+            {content}
+            {showCursor && (
+              <span className="ml-0.5 inline-block h-4 w-2 animate-pulse bg-neutral-400 align-middle" />
+            )}
+          </>
+        ) : (
+          <span className="text-neutral-500">
+            {placeholder}
+            {showCursor && (
+              <span className="ml-1 inline-block h-4 w-2 animate-pulse bg-neutral-400 align-middle" />
+            )}
+          </span>
+        )}
       </div>
     </div>
   );
