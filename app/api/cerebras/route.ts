@@ -1,6 +1,14 @@
 import type { NextRequest } from "next/server";
 
-const CEREBRAS_MODEL = "qwen-3-235b-a22b-instruct-2507";
+const ALLOWED_MODELS = [
+  "qwen-3-235b-a22b-instruct-2507",
+  "gpt-oss-120b",
+  "zai-glm-4.7",
+  "llama3.1-8b",
+] as const;
+
+type AllowedModel = (typeof ALLOWED_MODELS)[number];
+
 const CEREBRAS_URL = "https://api.cerebras.ai/v1/chat/completions";
 const SYSTEM_PROMPT =
   "You are a helpful assistant answering questions about UAE government services. Respond in the same language as the user's question. Be concise.";
@@ -18,24 +26,35 @@ function sseLine(event: ServerEvent): string {
   return `event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`;
 }
 
+function jsonError(message: string, status: number) {
+  return new Response(JSON.stringify({ error: message }), {
+    status,
+    headers: { "Content-Type": "application/json" },
+  });
+}
+
 export async function POST(req: NextRequest) {
   const apiKey = process.env.CEREBRAS_API_KEY;
-  if (!apiKey) {
-    return new Response(
-      sseLine({ type: "error", message: "CEREBRAS_API_KEY not set" }),
-      { status: 500, headers: { "Content-Type": "text/event-stream" } }
-    );
-  }
+  if (!apiKey) return jsonError("CEREBRAS_API_KEY not set", 500);
 
   let question: string;
+  let model: AllowedModel;
   try {
     const body = await req.json();
     question = String(body?.question ?? "").trim();
+    const requestedModel = String(body?.model ?? "");
     if (!question) throw new Error("empty question");
-  } catch {
-    return new Response(
-      sseLine({ type: "error", message: "Invalid body. Expect { question: string }" }),
-      { status: 400, headers: { "Content-Type": "text/event-stream" } }
+    if (!(ALLOWED_MODELS as readonly string[]).includes(requestedModel)) {
+      return jsonError(
+        `Invalid model. Allowed: ${ALLOWED_MODELS.join(", ")}`,
+        400
+      );
+    }
+    model = requestedModel as AllowedModel;
+  } catch (err) {
+    return jsonError(
+      `Invalid body. Expect { question: string, model: string }. ${(err as Error).message}`,
+      400
     );
   }
 
@@ -55,7 +74,7 @@ export async function POST(req: NextRequest) {
             Authorization: `Bearer ${apiKey}`,
           },
           body: JSON.stringify({
-            model: CEREBRAS_MODEL,
+            model,
             stream: true,
             stream_options: { include_usage: true },
             messages: [
@@ -138,9 +157,6 @@ export async function POST(req: NextRequest) {
       } finally {
         controller.close();
       }
-    },
-    cancel() {
-      // client aborted; nothing extra to clean up
     },
   });
 
